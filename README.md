@@ -5,11 +5,17 @@ Aplicación web para calcular y visualizar la distribución de piezas en carros 
 ## Funcionalidades
 
 - Cálculo automático de carros necesarios y carros completos.
-- Carga y espacios libres del último carro.
+- Comparación entre carros necesarios y disponibles.
+- Primera tanda y piezas pendientes cuando faltan carros.
+- Capacidades configurables según el tamaño de las piezas.
+- Asignación de OT individual, editable y persistente para cada carro.
+- Dragón asistente con mensajes motivadores periódicos.
 - Validación de cantidades enteras y capacidades válidas.
 - Representación visual del nivel de ocupación de cada carro.
-- Vista compacta para traslados con muchos carros.
+- Paginación para traslados con muchos carros.
 - Diseño responsive para escritorio y dispositivos móviles.
+
+Las capacidades por tamaño y las OT se guardan localmente en el navegador.
 
 ## Tecnologías
 

@@ -1,7 +1,12 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import DragonMascot from './components/DragonMascot.jsx'
+import { calculateTransport, getCartLoad, PIECE_SIZES, validateInteger } from './utils/transport.js'
+import { readStoredObject, storeObject } from './utils/storage.js'
 import './App.css'
 
-const MAX_VISIBLE_CARTS = 12
+const CARTS_PER_PAGE = 12
+const CAPACITY_KEY = 'traslados-capacidades-v2'
+const OT_KEY = 'traslados-ot-v2'
 
 function Icon({ name, size = 20 }) {
   const paths = {
@@ -9,154 +14,176 @@ function Icon({ name, size = 20 }) {
     cart: (<><path d="M4 5h2l1.7 9.2a2 2 0 0 0 2 1.6h7.7a2 2 0 0 0 2-1.6L21 8H7" /><path d="M10 8v4M14 8v4M18 8v4" /><circle cx="10" cy="20" r="1.5" /><circle cx="18" cy="20" r="1.5" /></>),
     check: <path d="m5 12 4 4L19 6" />,
     gauge: (<><path d="M20.4 15a9 9 0 1 0-16.8 0" /><path d="M12 12 16 8" /><path d="M12 3v2M4.2 7.5 6 8.5M19.8 7.5 18 8.5" /></>),
+    alert: (<><path d="M12 3 2.8 19h18.4L12 3Z" /><path d="M12 9v4M12 16h.01" /></>),
     layers: (<><path d="m12 2 9 5-9 5-9-5 9-5Z" /><path d="m3 12 9 5 9-5M3 17l9 5 9-5" /></>),
-    info: (<><circle cx="12" cy="12" r="9" /><path d="M12 11v5M12 8h.01" /></>),
+    clipboard: (<><rect x="5" y="4" width="14" height="17" rx="2" /><path d="M9 4.5V3h6v1.5M9 10h6M9 14h6" /></>),
+    arrow: <path d="m9 18 6-6-6-6" />,
   }
-
-  return (
-    <svg aria-hidden="true" className="icon" fill="none" height={size} viewBox="0 0 24 24" width={size}>
-      <g stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8">{paths[name]}</g>
-    </svg>
-  )
+  return <svg aria-hidden="true" className="icon" fill="none" height={size} viewBox="0 0 24 24" width={size}><g stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8">{paths[name]}</g></svg>
 }
 
-function validateInteger(value, { allowZero }) {
-  if (value === '') return 'Este campo es obligatorio.'
-  if (!/^\d+$/.test(value)) return 'Ingresá un número entero, sin decimales.'
-  const number = Number(value)
-  if (!Number.isSafeInteger(number)) return 'El valor ingresado es demasiado grande.'
-  if (!allowZero && number === 0) return 'La capacidad debe ser mayor que cero.'
-  return ''
-}
-
-function NumberField({ id, label, value, onChange, error, hint, icon }) {
+function NumberField({ id, label, value, onChange, error, hint, icon, unit, allowZero = true }) {
   return (
     <div className={`field ${error ? 'field--error' : ''}`}>
       <label htmlFor={id}>{label}</label>
       <div className="input-shell">
         <span className="input-icon"><Icon name={icon} size={19} /></span>
-        <input aria-describedby={`${id}-message`} aria-invalid={Boolean(error)} id={id} inputMode="numeric" min={id === 'capacity' ? '1' : '0'} onChange={(event) => onChange(event.target.value)} step="1" type="number" value={value} />
-        <span className="input-unit">piezas</span>
+        <input aria-describedby={`${id}-message`} aria-invalid={Boolean(error)} id={id} inputMode="numeric" min={allowZero ? '0' : '1'} onChange={(event) => onChange(event.target.value)} step="1" type="number" value={value} />
+        <span className="input-unit">{unit}</span>
       </div>
       <p className="field-message" id={`${id}-message`}>{error || hint}</p>
     </div>
   )
 }
 
-function StatCard({ icon, label, value, detail, tone = 'blue' }) {
+function SizeSelector({ value, onChange }) {
   return (
-    <article className={`stat-card stat-card--${tone}`}>
-      <div className="stat-icon"><Icon name={icon} size={21} /></div>
-      <div><p className="stat-label">{label}</p><p className="stat-value">{value}</p><p className="stat-detail">{detail}</p></div>
-    </article>
+    <fieldset className="size-field">
+      <legend>Tamaño de las piezas</legend>
+      <div className="size-options">
+        {PIECE_SIZES.map((size) => (
+          <label className={value === size.id ? 'size-option size-option--active' : 'size-option'} key={size.id}>
+            <input checked={value === size.id} name="piece-size" onChange={() => onChange(size.id)} type="radio" value={size.id} />
+            <span className={`size-dot size-dot--${size.id}`}><i /><i /><i /></span>
+            <span><strong>{size.label}</strong><small>{size.hint}</small></span>
+          </label>
+        ))}
+      </div>
+    </fieldset>
   )
 }
 
-function CartCard({ number, pieces, capacity, aggregate }) {
+function StatCard({ icon, label, value, detail, tone = 'blue' }) {
+  return <article className={`stat-card stat-card--${tone}`}><div className="stat-icon"><Icon name={icon} size={21} /></div><div><p className="stat-label">{label}</p><p className="stat-value">{value}</p><p className="stat-detail">{detail}</p></div></article>
+}
+
+function AvailabilityBanner({ plan, pieces }) {
+  if (pieces === 0) {
+    return <div className="availability availability--neutral"><Icon name="cart" size={23} /><div><strong>No hay piezas para trasladar.</strong><span>Ingresá una cantidad mayor que cero para preparar una tanda.</span></div></div>
+  }
+  if (plan.missingCarts > 0) {
+    return <div className="availability availability--warning" role="status"><Icon name="alert" size={23} /><div><strong>Se necesitan {plan.requiredCarts} carros, pero solamente hay {plan.usedCarts} disponibles. {plan.missingCarts === 1 ? 'Falta 1 carro.' : `Faltan ${plan.missingCarts} carros.`}</strong><span>En la primera tanda se trasladan {plan.firstBatchPieces} piezas y quedan {plan.pendingPieces} pendientes.</span></div></div>
+  }
+  return <div className="availability availability--success" role="status"><Icon name="check" size={23} /><div><strong>El traslado puede realizarse con los carros disponibles.</strong><span>{plan.surplusCarts === 0 ? 'La disponibilidad coincide con lo necesario.' : `${plan.surplusCarts} ${plan.surplusCarts === 1 ? 'carro quedará disponible' : 'carros quedarán disponibles'}.`}</span></div></div>
+}
+
+function CartCard({ number, pieces, capacity, ot, onOtChange }) {
   const isFull = pieces === capacity
   const percentage = Math.round((pieces / capacity) * 100)
-  const title = aggregate ? `Carros 1–${aggregate}` : `Carro ${number}`
-
   return (
     <article className={`cart-card ${isFull ? 'cart-card--full' : 'cart-card--partial'}`}>
       <div className="cart-card__header">
         <div className="cart-symbol"><Icon name="cart" size={22} /></div>
-        <div><h3>{title}</h3><p>{aggregate ? `${aggregate} unidades con igual carga` : isFull ? 'Carga completa' : 'Carga parcial'}</p></div>
+        <div><h3>Carro {number}</h3><p>{isFull ? 'Carga completa' : 'Carga parcial'}</p></div>
         <span className="status-pill">{isFull ? <><Icon name="check" size={14} /> Completo</> : 'Parcial'}</span>
       </div>
       <div className="cart-load"><span><strong>{pieces}</strong> de {capacity} piezas</span><strong>{percentage}%</strong></div>
       <div aria-label={`${percentage}% de ocupación`} aria-valuemax="100" aria-valuemin="0" aria-valuenow={percentage} className="progress" role="progressbar"><span style={{ width: `${percentage}%` }} /></div>
-      {!isFull && <p className="free-space">{capacity - pieces} espacios disponibles</p>}
+      <label className="ot-field"><span><Icon name="clipboard" size={15} /> OT asignada</span><input aria-label={`OT asignada al carro ${number}`} maxLength="30" onChange={(event) => onOtChange(number, event.target.value)} placeholder="Ej: 10542 o A-10542" type="text" value={ot} /></label>
     </article>
   )
 }
 
-function EmptyState() {
-  return (
-    <div className="empty-state">
-      <div className="empty-state__icon"><Icon name="cart" size={30} /></div>
-      <h3>No hay traslados por planificar</h3>
-      <p>Ingresá una cantidad de piezas mayor que cero para ver la distribución.</p>
-    </div>
-  )
+function EmptyDistribution({ zeroAvailable }) {
+  return <div className="empty-state"><div className="empty-state__icon"><Icon name={zeroAvailable ? 'alert' : 'cart'} size={30} /></div><h3>{zeroAvailable ? 'No hay carros disponibles' : 'No hay traslados por planificar'}</h3><p>{zeroAvailable ? 'Indicá al menos un carro disponible para preparar la primera tanda.' : 'Ingresá una cantidad de piezas mayor que cero para ver la distribución.'}</p></div>
 }
 
 function App() {
   const [piecesInput, setPiecesInput] = useState('37')
-  const [capacityInput, setCapacityInput] = useState('8')
-  const piecesError = validateInteger(piecesInput, { allowZero: true })
+  const [availableInput, setAvailableInput] = useState('4')
+  const [pieceSize, setPieceSize] = useState('medianas')
+  const [capacities, setCapacities] = useState(() => readStoredObject(CAPACITY_KEY, { grandes: '', medianas: '', pequenas: '' }))
+  const [orders, setOrders] = useState(() => readStoredObject(OT_KEY, {}))
+  const [page, setPage] = useState(1)
+
+  const capacityInput = capacities[pieceSize] ?? ''
+  const piecesError = validateInteger(piecesInput)
   const capacityError = validateInteger(capacityInput, { allowZero: false })
-  const isValid = !piecesError && !capacityError
+  const availableError = validateInteger(availableInput)
+  const isValid = !piecesError && !capacityError && !availableError
+
+  useEffect(() => storeObject(CAPACITY_KEY, capacities), [capacities])
+  useEffect(() => storeObject(OT_KEY, orders), [orders])
 
   const plan = useMemo(() => {
     if (!isValid) return null
-    const pieces = Number(piecesInput)
-    const capacity = Number(capacityInput)
-    const totalCarts = Math.ceil(pieces / capacity)
-    const remainder = pieces % capacity
-    const fullCarts = Math.floor(pieces / capacity)
-    const lastCartPieces = totalCarts === 0 ? 0 : remainder || capacity
-    const freeSpaces = totalCarts === 0 ? 0 : capacity - lastCartPieces
-    return { pieces, capacity, totalCarts, fullCarts, lastCartPieces, freeSpaces, remainder }
-  }, [capacityInput, isValid, piecesInput])
+    return calculateTransport({ pieces: Number(piecesInput), capacity: Number(capacityInput), availableCarts: Number(availableInput) })
+  }, [availableInput, capacityInput, isValid, piecesInput])
 
-  const carts = useMemo(() => {
-    if (!plan || plan.totalCarts === 0 || plan.totalCarts > MAX_VISIBLE_CARTS) return []
-    return Array.from({ length: plan.totalCarts }, (_, index) => ({ number: index + 1, pieces: index === plan.totalCarts - 1 ? plan.lastCartPieces : plan.capacity }))
-  }, [plan])
+  const totalPages = plan ? Math.max(1, Math.ceil(plan.usedCarts / CARTS_PER_PAGE)) : 1
+  const currentPage = Math.min(page, totalPages)
+
+  const visibleCarts = useMemo(() => {
+    if (!plan || plan.usedCarts === 0) return []
+    const start = (currentPage - 1) * CARTS_PER_PAGE
+    const count = Math.min(CARTS_PER_PAGE, plan.usedCarts - start)
+    return Array.from({ length: count }, (_, position) => {
+      const index = start + position
+      return { number: index + 1, pieces: getCartLoad(index, Number(piecesInput), Number(capacityInput)) }
+    })
+  }, [capacityInput, currentPage, piecesInput, plan])
+
+  function updateCapacity(value) {
+    setCapacities((current) => ({ ...current, [pieceSize]: value }))
+  }
+
+  function updateOrder(cartNumber, value) {
+    setOrders((current) => ({ ...current, [cartNumber]: value }))
+  }
+
+  const selectedSize = PIECE_SIZES.find((size) => size.id === pieceSize)
+  const balanceValue = plan ? plan.missingCarts || plan.surplusCarts : 0
+  const balanceLabel = plan?.missingCarts ? 'Carros faltantes' : 'Carros sobrantes'
 
   return (
     <div className="app-shell">
-      <header className="topbar">
-        <div className="brand-mark"><Icon name="boxes" size={23} /></div>
-        <div><p className="eyebrow">LOGÍSTICA INTERNA</p><p className="brand-name">Planificador de traslados</p></div>
-        <span className="version-badge">Versión 1.0</span>
-      </header>
-
+      <header className="topbar"><div className="brand-mark"><Icon name="boxes" size={23} /></div><div><p className="eyebrow">LOGÍSTICA INTERNA</p><p className="brand-name">Planificador de Traslado de Piezas</p></div><span className="version-badge">Versión 2.0</span></header>
       <main>
         <section className="intro">
-          <div>
-            <span className="section-kicker"><span /> PLANIFICACIÓN DE CARGA</span>
-            <h1>Calculá el traslado<br />de <em>piezas</em></h1>
-            <p>Definí la cantidad y capacidad. El sistema organiza automáticamente los carros necesarios para el traslado.</p>
-          </div>
-          <div className="intro-illustration" aria-hidden="true"><span className="route-line" /><div className="illustration-box box-one"><Icon name="boxes" size={28} /></div><div className="illustration-cart"><Icon name="cart" size={40} /></div><div className="illustration-box box-two"><Icon name="boxes" size={24} /></div></div>
+          <div><span className="section-kicker"><span /> PLANIFICACIÓN DE CARGA</span><h1>Organizá cada traslado<br />con <em>precisión</em></h1><p>Configurá las piezas y los carros disponibles. El sistema prepara una primera tanda realista y te muestra lo que queda pendiente.</p></div>
+          <DragonMascot />
         </section>
 
         <section className="calculator-panel" aria-labelledby="data-title">
-          <div className="panel-heading"><div className="step-number">01</div><div><h2 id="data-title">Datos del traslado</h2><p>Completá los valores para calcular la distribución.</p></div></div>
-          <div className="fields-grid">
-            <NumberField error={piecesError} hint="Cantidad total a transportar" icon="boxes" id="pieces" label="Cantidad total de piezas" onChange={setPiecesInput} value={piecesInput} />
-            <NumberField error={capacityError} hint="Máximo permitido por carro" icon="gauge" id="capacity" label="Capacidad por carro" onChange={setCapacityInput} value={capacityInput} />
+          <div className="panel-heading"><div className="step-number">01</div><div><h2 id="data-title">Configuración del traslado</h2><p>Los resultados se actualizan automáticamente con cada cambio.</p></div></div>
+          <div className="fields-grid fields-grid--top">
+            <NumberField error={piecesError} hint="Cantidad total a transportar" icon="boxes" id="pieces" label="Cantidad total de piezas" onChange={setPiecesInput} unit="piezas" value={piecesInput} />
+            <NumberField allowZero error={availableError} hint="Carros físicamente disponibles" icon="cart" id="available" label="Carros disponibles en el sector" onChange={setAvailableInput} unit="carros" value={availableInput} />
+          </div>
+          <SizeSelector onChange={(value) => { setPieceSize(value); setPage(1) }} value={pieceSize} />
+          <div className="capacity-row">
+            <NumberField allowZero={false} error={capacityError} hint={`Capacidad guardada para piezas ${selectedSize.label.toLowerCase()}`} icon="gauge" id="capacity" label={`Capacidad por carro — ${selectedSize.label}`} onChange={updateCapacity} unit="piezas" value={capacityInput} />
+            <div className="capacity-note"><Icon name="layers" size={20} /><p><strong>Configuración por tamaño</strong><span>La capacidad se guarda por separado para cada opción y podés modificarla cuando sea necesario.</span></p></div>
           </div>
         </section>
 
         {!isValid ? (
-          <div className="validation-banner" role="alert"><Icon name="info" size={22} /><div><strong>Revisá los datos ingresados</strong><span>Corregí los campos marcados para calcular el traslado.</span></div></div>
+          <div className="validation-banner" role="alert"><Icon name="alert" size={22} /><div><strong>{capacityInput === '' ? `Definí la capacidad para piezas ${selectedSize.label.toLowerCase()}.` : 'Revisá los datos ingresados.'}</strong><span>Completá correctamente los campos marcados para calcular el traslado.</span></div></div>
         ) : (
           <>
             <section className="results-section" aria-labelledby="result-title" aria-live="polite">
-              <div className="section-heading"><div><span className="section-kicker"><span /> RESULTADO</span><h2 id="result-title">Resumen del traslado</h2></div><p>{plan.pieces === 0 ? 'Sin piezas para trasladar' : `${plan.pieces} piezas distribuidas en ${plan.totalCarts} ${plan.totalCarts === 1 ? 'carro' : 'carros'}`}</p></div>
+              <div className="section-heading"><div><span className="section-kicker"><span /> RESULTADO</span><h2 id="result-title">Resumen del traslado</h2></div><p>Primera tanda calculada según la disponibilidad real</p></div>
+              <AvailabilityBanner pieces={Number(piecesInput)} plan={plan} />
               <div className="stats-grid">
-                <StatCard icon="cart" label="Carros necesarios" value={plan.totalCarts} detail="Total a preparar" />
-                <StatCard icon="check" label="Carros completos" value={plan.fullCarts} detail="Al 100% de capacidad" tone="green" />
-                <StatCard icon="boxes" label="Carga último carro" value={plan.lastCartPieces} detail={plan.totalCarts === 0 ? 'Sin carga asignada' : plan.remainder === 0 ? 'Carga completa' : 'Piezas asignadas'} tone="amber" />
-                <StatCard icon="layers" label="Espacios libres" value={plan.freeSpaces} detail="En el último carro" tone="gray" />
+                <StatCard icon="cart" label="Carros necesarios" value={plan.requiredCarts} detail="Para completar el traslado" />
+                <StatCard icon="check" label="Carros disponibles" value={Number(availableInput)} detail={`${plan.usedCarts} se usarán en la tanda`} tone="green" />
+                <StatCard icon={plan.missingCarts ? 'alert' : 'layers'} label={balanceLabel} value={balanceValue} detail="Balance de disponibilidad" tone={plan.missingCarts ? 'red' : 'gray'} />
+                <StatCard icon="boxes" label="Primera tanda" value={plan.firstBatchPieces} detail="Piezas que se trasladan" tone="amber" />
+                <StatCard icon="layers" label="Piezas pendientes" value={plan.pendingPieces} detail="Para una próxima tanda" tone={plan.pendingPieces ? 'red' : 'green'} />
               </div>
             </section>
 
             <section className="distribution-section" aria-labelledby="distribution-title">
-              <div className="section-heading"><div><span className="section-kicker"><span /> DISTRIBUCIÓN</span><h2 id="distribution-title">Carga de los carros</h2></div>{plan.totalCarts > 0 && <div className="legend"><span className="legend-full" /> Completo <span className="legend-partial" /> Parcial</div>}</div>
-              {plan.totalCarts === 0 ? <EmptyState /> : plan.totalCarts <= MAX_VISIBLE_CARTS ? (
-                <div className="carts-grid">{carts.map((cart) => <CartCard capacity={plan.capacity} key={cart.number} {...cart} />)}</div>
-              ) : (
-                <div className="compact-view"><div className="compact-note"><Icon name="info" size={20} /><span>Vista resumida para facilitar la lectura de un traslado grande.</span></div><div className="carts-grid carts-grid--compact">{plan.fullCarts > 0 && <CartCard aggregate={plan.fullCarts} capacity={plan.capacity} pieces={plan.capacity} />}{plan.remainder > 0 && <CartCard capacity={plan.capacity} number={plan.totalCarts} pieces={plan.remainder} />}</div></div>
-              )}
+              <div className="section-heading"><div><span className="section-kicker"><span /> DISTRIBUCIÓN</span><h2 id="distribution-title">Carga y OT de los carros</h2></div>{plan.usedCarts > 0 && <p>{plan.usedCarts} {plan.usedCarts === 1 ? 'carro asignado' : 'carros asignados'} · máximo {CARTS_PER_PAGE} por página</p>}</div>
+              {plan.usedCarts === 0 ? <EmptyDistribution zeroAvailable={Number(piecesInput) > 0 && Number(availableInput) === 0} /> : <>
+                <div className="carts-grid">{visibleCarts.map((cart) => <CartCard capacity={Number(capacityInput)} key={cart.number} onOtChange={updateOrder} ot={orders[cart.number] ?? ''} {...cart} />)}</div>
+                {totalPages > 1 && <nav aria-label="Páginas de carros" className="pagination"><button disabled={currentPage === 1} onClick={() => setPage(Math.max(1, currentPage - 1))} type="button">Anterior</button><span>Página <strong>{currentPage}</strong> de {totalPages}</span><button disabled={currentPage === totalPages} onClick={() => setPage(Math.min(totalPages, currentPage + 1))} type="button">Siguiente <Icon name="arrow" size={14} /></button></nav>}
+              </>}
             </section>
           </>
         )}
       </main>
-      <footer><span>PLANIFICADOR DE TRASLADOS</span><p>Herramienta de apoyo para la logística interna de planta.</p></footer>
+      <footer><span>PLANIFICADOR DE TRASLADOS · V2</span><p>Herramienta de apoyo para la logística interna de planta.</p></footer>
     </div>
   )
 }
