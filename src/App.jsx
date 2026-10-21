@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import DragonMascot from './components/DragonMascot.jsx'
+import { saveTransferRecord } from './services/firebase.js'
 import { calculateTransport, getCartLoad, PIECE_SIZES, validateInteger } from './utils/transport.js'
 import { readStoredArray, readStoredObject, storeObject } from './utils/storage.js'
 import './App.css'
@@ -122,6 +123,7 @@ function App() {
   const [transportedBy, setTransportedBy] = useState('')
   const [records, setRecords] = useState(() => readStoredArray(RECORDS_KEY))
   const [saveResult, setSaveResult] = useState(null)
+  const [isSaving, setIsSaving] = useState(false)
   const [page, setPage] = useState(1)
 
   const capacityInput = capacities[pieceSize] ?? ''
@@ -167,10 +169,10 @@ function App() {
   const balanceValue = plan ? plan.missingCarts || plan.surplusCarts : 0
   const balanceLabel = plan?.missingCarts ? 'Carros faltantes' : 'Carros sobrantes'
   const saveSignature = JSON.stringify({ loadedBy, transportedBy, piecesInput, availableInput, pieceSize, capacityInput, orders })
-  const canSave = isValid && Number(piecesInput) > 0 && loadedBy.trim() !== '' && transportedBy.trim() !== ''
+  const canSave = isValid && Number(piecesInput) > 0 && loadedBy.trim() !== '' && transportedBy.trim() !== '' && !isSaving
   const visibleSaveResult = saveResult?.type === 'error' || saveResult?.signature === saveSignature ? saveResult : null
 
-  function saveTransfer() {
+  async function saveTransfer() {
     if (!canSave || !plan) return
 
     const usedOrders = Object.fromEntries(
@@ -188,20 +190,36 @@ function App() {
       ...plan,
       orders: usedOrders,
     }
-    const nextRecords = [record, ...records]
+    setIsSaving(true)
+    setSaveResult(null)
 
-    if (!storeObject(RECORDS_KEY, nextRecords)) {
-      setSaveResult({ type: 'error', message: 'No se pudo guardar el registro en este navegador.' })
-      return
+    try {
+      const firestoreId = await saveTransferRecord(record)
+      const savedRecord = { ...record, firestoreId }
+      const nextRecords = [savedRecord, ...records]
+
+      storeObject(RECORDS_KEY, nextRecords)
+      setRecords(nextRecords)
+      setSaveResult({ type: 'success', signature: saveSignature, createdAt: record.createdAt })
+    } catch (error) {
+      const messages = {
+        'firebase/missing-config': 'Falta configurar Firebase en este entorno.',
+        'permission-denied': 'Firestore rechazó el guardado. Revisá las reglas de seguridad.',
+        unavailable: 'Firestore no está disponible en este momento. Intentá nuevamente.',
+        'network-request-failed': 'No se pudo conectar con Firebase. Revisá la conexión a internet.',
+      }
+      setSaveResult({
+        type: 'error',
+        message: messages[error.code] ?? 'No se pudo guardar el traslado en Firestore.',
+      })
+    } finally {
+      setIsSaving(false)
     }
-
-    setRecords(nextRecords)
-    setSaveResult({ type: 'success', signature: saveSignature, createdAt: record.createdAt })
   }
 
   return (
     <div className="app-shell">
-      <header className="topbar"><div className="brand-mark"><Icon name="boxes" size={23} /></div><div><p className="eyebrow">LOGÍSTICA INTERNA</p><p className="brand-name">Planificador de Traslado de Piezas</p></div><span className="version-badge">Versión 2.1</span></header>
+      <header className="topbar"><div className="brand-mark"><Icon name="boxes" size={23} /></div><div><p className="eyebrow">LOGÍSTICA INTERNA</p><p className="brand-name">Planificador de Traslado de Piezas</p></div><span className="version-badge">Versión 2.2</span></header>
       <main>
         <section className="intro">
           <div><span className="section-kicker"><span /> PLANIFICACIÓN DE CARGA</span><h1>Organizá cada traslado<br />con <em>precisión</em></h1><p>Configurá las piezas y los carros disponibles. El sistema prepara una primera tanda realista y te muestra lo que queda pendiente.</p></div>
@@ -253,20 +271,20 @@ function App() {
             <section className="save-section" aria-labelledby="save-title">
               <div className="save-copy">
                 <div className="save-icon"><Icon name="save" size={23} /></div>
-                <div><h2 id="save-title">Guardar registro del traslado</h2><p>Por ahora se guarda en este dispositivo. Luego conectaremos este mismo registro con Firebase.</p></div>
+                <div><h2 id="save-title">Guardar registro del traslado</h2><p>El registro se guarda en Firestore y se conserva una copia local en este dispositivo.</p></div>
               </div>
               <div className="save-actions">
-                <span>{records.length} {records.length === 1 ? 'registro guardado' : 'registros guardados'}</span>
-                <button disabled={!canSave} onClick={saveTransfer} type="button"><Icon name="save" size={17} /> Guardar traslado</button>
+                <span>{records.length} {records.length === 1 ? 'registro en este dispositivo' : 'registros en este dispositivo'}</span>
+                <button disabled={!canSave} onClick={saveTransfer} type="button"><Icon name="save" size={17} /> {isSaving ? 'Guardando...' : 'Guardar traslado'}</button>
               </div>
-              {!canSave && <p className="save-help">Completá ambos nombres y los datos válidos del traslado para guardar.</p>}
-              {visibleSaveResult?.type === 'success' && <div className="save-feedback save-feedback--success" role="status"><Icon name="check" size={18} /><span><strong>Traslado guardado correctamente.</strong> {new Date(visibleSaveResult.createdAt).toLocaleString('es-AR')}</span></div>}
+              {!isSaving && !canSave && <p className="save-help">Completá ambos nombres y los datos válidos del traslado para guardar.</p>}
+              {visibleSaveResult?.type === 'success' && <div className="save-feedback save-feedback--success" role="status"><Icon name="check" size={18} /><span><strong>Traslado guardado en Firestore.</strong> {new Date(visibleSaveResult.createdAt).toLocaleString('es-AR')}</span></div>}
               {visibleSaveResult?.type === 'error' && <div className="save-feedback save-feedback--error" role="alert"><Icon name="alert" size={18} /><span>{visibleSaveResult.message}</span></div>}
             </section>
           </>
         )}
       </main>
-      <footer><span>PLANIFICADOR DE TRASLADOS · V2.1</span><p>Herramienta de apoyo para la logística interna de planta.</p></footer>
+      <footer><span>PLANIFICADOR DE TRASLADOS · V2.2</span><p>Herramienta de apoyo para la logística interna de planta.</p></footer>
     </div>
   )
 }
