@@ -1,0 +1,88 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /traslados/{transferId} {
+      allow create: if isValidTransfer(transferId);
+      allow read, update, delete: if false;
+    }
+
+    function isValidTransfer(transferId) {
+      let data = request.resource.data;
+
+      return data.keys().hasAll([
+          'id',
+          'createdAt',
+          'createdAtClient',
+          'loadedBy',
+          'transportedBy',
+          'pieces',
+          'pieceSize',
+          'pieceSizeLabel',
+          'capacity',
+          'availableCarts',
+          'requiredCarts',
+          'usedCarts',
+          'firstBatchPieces',
+          'pendingPieces',
+          'missingCarts',
+          'surplusCarts',
+          'orders'
+        ])
+        && data.keys().hasOnly([
+          'id',
+          'createdAt',
+          'createdAtClient',
+          'loadedBy',
+          'transportedBy',
+          'pieces',
+          'pieceSize',
+          'pieceSizeLabel',
+          'capacity',
+          'availableCarts',
+          'requiredCarts',
+          'usedCarts',
+          'firstBatchPieces',
+          'pendingPieces',
+          'missingCarts',
+          'surplusCarts',
+          'orders'
+        ])
+        && data.id == transferId
+        && data.createdAt is timestamp
+        && data.createdAtClient is string
+        && data.createdAtClient.size() <= 40
+        && data.loadedBy is string
+        && data.loadedBy.size() > 0
+        && data.loadedBy.size() <= 80
+        && data.transportedBy is string
+        && data.transportedBy.size() > 0
+        && data.transportedBy.size() <= 80
+        && data.pieceSize in ['grandes', 'medianas', 'pequenas']
+        && data.pieceSizeLabel is string
+        && data.pieceSizeLabel.size() <= 20
+        && data.orders is map
+        && data.pieces is int
+        && data.pieces > 0
+        && data.capacity is int
+        && data.capacity > 0
+        && data.availableCarts is int
+        && data.availableCarts >= 0
+        && data.requiredCarts is int
+        && data.requiredCarts > 0
+        && data.usedCarts is int
+        && data.usedCarts >= 0
+        && data.usedCarts <= data.availableCarts
+        && data.usedCarts <= data.requiredCarts
+        && data.firstBatchPieces is int
+        && data.firstBatchPieces >= 0
+        && data.firstBatchPieces <= data.pieces
+        && data.pendingPieces is int
+        && data.pendingPieces == data.pieces - data.firstBatchPieces
+        && data.missingCarts is int
+        && data.missingCarts >= 0
+        && data.surplusCarts is int
+        && data.surplusCarts >= 0;
+    }
+  }
+}
