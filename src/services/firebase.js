@@ -48,3 +48,25 @@ export async function saveTransferRecord(record) {
 
   return reference.id
 }
+
+export async function listTransferRecords() {
+  const [database, { collection, getDocs, limit, orderBy, query }] = await Promise.all([
+    getDatabase(),
+    import('firebase/firestore'),
+  ])
+  const recordsQuery = query(
+    collection(database, 'traslados'),
+    orderBy('createdAt', 'desc'),
+    limit(50),
+  )
+  const snapshot = await getDocs(recordsQuery)
+
+  return snapshot.docs.map((recordDocument) => {
+    const data = recordDocument.data()
+    return {
+      ...data,
+      firestoreId: recordDocument.id,
+      createdAt: data.createdAt?.toDate?.().toISOString() ?? data.createdAtClient,
+    }
+  })
+}

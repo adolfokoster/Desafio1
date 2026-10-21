@@ -17,6 +17,7 @@ Aplicación web para calcular y visualizar la distribución de piezas en carros 
 - Paginación para traslados con muchos carros.
 - Diseño responsive para escritorio y dispositivos móviles.
 - Registro de responsables y guardado de traslados en Cloud Firestore.
+- Historial público con los últimos 50 traslados registrados.
 
 Las capacidades y las OT se guardan localmente. Los traslados se sincronizan con la colección `traslados` de Cloud Firestore y conservan una copia local de respaldo.
 
@@ -27,7 +28,7 @@ Las capacidades y las OT se guardan localmente. Los traslados se sincronizan con
 3. Configurá las mismas variables en el entorno de producción de Vercel.
 4. Verificá que las reglas de Firestore permitan crear documentos en la colección `traslados`.
 
-El archivo `firestore.rules` permite únicamente crear registros que respeten el esquema esperado. Las lecturas, modificaciones y eliminaciones desde el cliente permanecen bloqueadas.
+El archivo `firestore.rules` permite crear registros que respeten el esquema esperado y consultar el historial. Las modificaciones y eliminaciones desde el cliente permanecen bloqueadas.
 
 Las variables con prefijo `VITE_` forman parte del código cliente compilado. No agregues claves privadas ni credenciales de cuentas de servicio.
 
