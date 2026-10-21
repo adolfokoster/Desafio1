@@ -16,8 +16,20 @@ Aplicación web para calcular y visualizar la distribución de piezas en carros 
 - Representación visual del nivel de ocupación de cada carro.
 - Paginación para traslados con muchos carros.
 - Diseño responsive para escritorio y dispositivos móviles.
+- Registro de responsables y guardado de traslados en Cloud Firestore.
 
-Las capacidades por tamaño y las OT se guardan localmente en el navegador.
+Las capacidades y las OT se guardan localmente. Los traslados se sincronizan con la colección `traslados` de Cloud Firestore y conservan una copia local de respaldo.
+
+## Configuración de Firebase
+
+1. Copiá `.env.example` como `.env`.
+2. Completá las variables `VITE_FIREBASE_*` con la configuración de la aplicación web de Firebase.
+3. Configurá las mismas variables en el entorno de producción de Vercel.
+4. Verificá que las reglas de Firestore permitan crear documentos en la colección `traslados`.
+
+El archivo `firestore.rules` permite únicamente crear registros que respeten el esquema esperado. Las lecturas, modificaciones y eliminaciones desde el cliente permanecen bloqueadas.
+
+Las variables con prefijo `VITE_` forman parte del código cliente compilado. No agregues claves privadas ni credenciales de cuentas de servicio.
 
 ## Preparación para Firebase
 
