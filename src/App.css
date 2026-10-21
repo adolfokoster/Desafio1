@@ -171,4 +171,3 @@ footer p { margin: 0; }
   .save-section { padding: 20px 17px; } .save-copy { align-items: flex-start; } .save-actions button { width: 100%; }
   footer { align-items: flex-start; flex-direction: column; gap: 4px; justify-content: center; padding: 0 20px; }
 }
-
