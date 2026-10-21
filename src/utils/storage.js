@@ -21,8 +21,7 @@ export function storeObject(key, value) {
     localStorage.setItem(key, JSON.stringify(value))
     return true
   } catch {
-    // La aplicaciÃ³n sigue funcionando si el navegador bloquea el almacenamiento.
+    // La aplicación sigue funcionando si el navegador bloquea el almacenamiento.
     return false
   }
 }
-
