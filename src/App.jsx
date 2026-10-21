@@ -63,7 +63,7 @@ function NumberField({ id, label, value, onChange, error, hint, icon, unit, allo
 function SizeSelector({ value, onChange }) {
   return (
     <fieldset className="size-field">
-      <legend>TamaÃ±o de las piezas</legend>
+      <legend>Tamaño de las piezas</legend>
       <div className="size-options">
         {PIECE_SIZES.map((size) => (
           <label className={value === size.id ? 'size-option size-option--active' : 'size-option'} key={size.id}>
@@ -83,12 +83,12 @@ function StatCard({ icon, label, value, detail, tone = 'blue' }) {
 
 function AvailabilityBanner({ plan, pieces }) {
   if (pieces === 0) {
-    return <div className="availability availability--neutral"><Icon name="cart" size={23} /><div><strong>No hay piezas para trasladar.</strong><span>IngresÃ¡ una cantidad mayor que cero para preparar una tanda.</span></div></div>
+    return <div className="availability availability--neutral"><Icon name="cart" size={23} /><div><strong>No hay piezas para trasladar.</strong><span>Ingresá una cantidad mayor que cero para preparar una tanda.</span></div></div>
   }
   if (plan.missingCarts > 0) {
     return <div className="availability availability--warning" role="status"><Icon name="alert" size={23} /><div><strong>Se necesitan {plan.requiredCarts} carros, pero solamente hay {plan.usedCarts} disponibles. {plan.missingCarts === 1 ? 'Falta 1 carro.' : `Faltan ${plan.missingCarts} carros.`}</strong><span>En la primera tanda se trasladan {plan.firstBatchPieces} piezas y quedan {plan.pendingPieces} pendientes.</span></div></div>
   }
-  return <div className="availability availability--success" role="status"><Icon name="check" size={23} /><div><strong>El traslado puede realizarse con los carros disponibles.</strong><span>{plan.surplusCarts === 0 ? 'La disponibilidad coincide con lo necesario.' : `${plan.surplusCarts} ${plan.surplusCarts === 1 ? 'carro quedarÃ¡ disponible' : 'carros quedarÃ¡n disponibles'}.`}</span></div></div>
+  return <div className="availability availability--success" role="status"><Icon name="check" size={23} /><div><strong>El traslado puede realizarse con los carros disponibles.</strong><span>{plan.surplusCarts === 0 ? 'La disponibilidad coincide con lo necesario.' : `${plan.surplusCarts} ${plan.surplusCarts === 1 ? 'carro quedará disponible' : 'carros quedarán disponibles'}.`}</span></div></div>
 }
 
 function CartCard({ number, pieces, capacity, ot, onOtChange }) {
@@ -102,14 +102,14 @@ function CartCard({ number, pieces, capacity, ot, onOtChange }) {
         <span className="status-pill">{isFull ? <><Icon name="check" size={14} /> Completo</> : 'Parcial'}</span>
       </div>
       <div className="cart-load"><span><strong>{pieces}</strong> de {capacity} piezas</span><strong>{percentage}%</strong></div>
-      <div aria-label={`${percentage}% de ocupaciÃ³n`} aria-valuemax="100" aria-valuemin="0" aria-valuenow={percentage} className="progress" role="progressbar"><span style={{ width: `${percentage}%` }} /></div>
+      <div aria-label={`${percentage}% de ocupación`} aria-valuemax="100" aria-valuemin="0" aria-valuenow={percentage} className="progress" role="progressbar"><span style={{ width: `${percentage}%` }} /></div>
       <label className="ot-field"><span><Icon name="clipboard" size={15} /> OT asignada</span><input aria-label={`OT asignada al carro ${number}`} maxLength="30" onChange={(event) => onOtChange(number, event.target.value)} placeholder="Ej: 10542 o A-10542" type="text" value={ot} /></label>
     </article>
   )
 }
 
 function EmptyDistribution({ zeroAvailable }) {
-  return <div className="empty-state"><div className="empty-state__icon"><Icon name={zeroAvailable ? 'alert' : 'cart'} size={30} /></div><h3>{zeroAvailable ? 'No hay carros disponibles' : 'No hay traslados por planificar'}</h3><p>{zeroAvailable ? 'IndicÃ¡ al menos un carro disponible para preparar la primera tanda.' : 'IngresÃ¡ una cantidad de piezas mayor que cero para ver la distribuciÃ³n.'}</p></div>
+  return <div className="empty-state"><div className="empty-state__icon"><Icon name={zeroAvailable ? 'alert' : 'cart'} size={30} /></div><h3>{zeroAvailable ? 'No hay carros disponibles' : 'No hay traslados por planificar'}</h3><p>{zeroAvailable ? 'Indicá al menos un carro disponible para preparar la primera tanda.' : 'Ingresá una cantidad de piezas mayor que cero para ver la distribución.'}</p></div>
 }
 
 function App() {
@@ -201,52 +201,52 @@ function App() {
 
   return (
     <div className="app-shell">
-      <header className="topbar"><div className="brand-mark"><Icon name="boxes" size={23} /></div><div><p className="eyebrow">LOGÃSTICA INTERNA</p><p className="brand-name">Planificador de Traslado de Piezas</p></div><span className="version-badge">VersiÃ³n 2.1</span></header>
+      <header className="topbar"><div className="brand-mark"><Icon name="boxes" size={23} /></div><div><p className="eyebrow">LOGÍSTICA INTERNA</p><p className="brand-name">Planificador de Traslado de Piezas</p></div><span className="version-badge">Versión 2.1</span></header>
       <main>
         <section className="intro">
-          <div><span className="section-kicker"><span /> PLANIFICACIÃ“N DE CARGA</span><h1>OrganizÃ¡ cada traslado<br />con <em>precisiÃ³n</em></h1><p>ConfigurÃ¡ las piezas y los carros disponibles. El sistema prepara una primera tanda realista y te muestra lo que queda pendiente.</p></div>
+          <div><span className="section-kicker"><span /> PLANIFICACIÓN DE CARGA</span><h1>Organizá cada traslado<br />con <em>precisión</em></h1><p>Configurá las piezas y los carros disponibles. El sistema prepara una primera tanda realista y te muestra lo que queda pendiente.</p></div>
           <DragonMascot />
         </section>
 
         <section className="calculator-panel" aria-labelledby="data-title">
-          <div className="panel-heading"><div className="step-number">01</div><div><h2 id="data-title">ConfiguraciÃ³n del traslado</h2><p>Los resultados se actualizan automÃ¡ticamente con cada cambio.</p></div></div>
+          <div className="panel-heading"><div className="step-number">01</div><div><h2 id="data-title">Configuración del traslado</h2><p>Los resultados se actualizan automáticamente con cada cambio.</p></div></div>
           <div className="fields-grid fields-grid--top">
             <NumberField error={piecesError} hint="Cantidad total a transportar" icon="boxes" id="pieces" label="Cantidad total de piezas" onChange={setPiecesInput} unit="piezas" value={piecesInput} />
-            <NumberField allowZero error={availableError} hint="Carros fÃ­sicamente disponibles" icon="cart" id="available" label="Carros disponibles en el sector" onChange={setAvailableInput} unit="carros" value={availableInput} />
+            <NumberField allowZero error={availableError} hint="Carros físicamente disponibles" icon="cart" id="available" label="Carros disponibles en el sector" onChange={setAvailableInput} unit="carros" value={availableInput} />
           </div>
           <SizeSelector onChange={(value) => { setPieceSize(value); setPage(1) }} value={pieceSize} />
           <div className="capacity-row">
-            <NumberField allowZero={false} error={capacityError} hint={`Capacidad guardada para piezas ${selectedSize.label.toLowerCase()}`} icon="gauge" id="capacity" label={`Capacidad por carro â€” ${selectedSize.label}`} onChange={updateCapacity} unit="piezas" value={capacityInput} />
-            <div className="capacity-note"><Icon name="layers" size={20} /><p><strong>ConfiguraciÃ³n por tamaÃ±o</strong><span>La capacidad se guarda por separado para cada opciÃ³n y podÃ©s modificarla cuando sea necesario.</span></p></div>
+            <NumberField allowZero={false} error={capacityError} hint={`Capacidad guardada para piezas ${selectedSize.label.toLowerCase()}`} icon="gauge" id="capacity" label={`Capacidad por carro — ${selectedSize.label}`} onChange={updateCapacity} unit="piezas" value={capacityInput} />
+            <div className="capacity-note"><Icon name="layers" size={20} /><p><strong>Configuración por tamaño</strong><span>La capacidad se guarda por separado para cada opción y podés modificarla cuando sea necesario.</span></p></div>
           </div>
           <div className="responsible-divider"><span>RESPONSABLES DEL TRASLADO</span></div>
           <div className="fields-grid responsible-grid">
-            <TextField hint="Persona responsable de ingresar la informaciÃ³n" id="loaded-by" label="Nombre de quien carga los datos" onChange={setLoadedBy} placeholder="Nombre y apellido" value={loadedBy} />
+            <TextField hint="Persona responsable de ingresar la información" id="loaded-by" label="Nombre de quien carga los datos" onChange={setLoadedBy} placeholder="Nombre y apellido" value={loadedBy} />
             <TextField hint="Persona responsable de llevar el material" id="transported-by" label="Nombre de quien lleva el material" onChange={setTransportedBy} placeholder="Nombre y apellido" value={transportedBy} />
           </div>
         </section>
 
         {!isValid ? (
-          <div className="validation-banner" role="alert"><Icon name="alert" size={22} /><div><strong>{capacityInput === '' ? `DefinÃ­ la capacidad para piezas ${selectedSize.label.toLowerCase()}.` : 'RevisÃ¡ los datos ingresados.'}</strong><span>CompletÃ¡ correctamente los campos marcados para calcular el traslado.</span></div></div>
+          <div className="validation-banner" role="alert"><Icon name="alert" size={22} /><div><strong>{capacityInput === '' ? `Definí la capacidad para piezas ${selectedSize.label.toLowerCase()}.` : 'Revisá los datos ingresados.'}</strong><span>Completá correctamente los campos marcados para calcular el traslado.</span></div></div>
         ) : (
           <>
             <section className="results-section" aria-labelledby="result-title" aria-live="polite">
-              <div className="section-heading"><div><span className="section-kicker"><span /> RESULTADO</span><h2 id="result-title">Resumen del traslado</h2></div><p>Primera tanda calculada segÃºn la disponibilidad real</p></div>
+              <div className="section-heading"><div><span className="section-kicker"><span /> RESULTADO</span><h2 id="result-title">Resumen del traslado</h2></div><p>Primera tanda calculada según la disponibilidad real</p></div>
               <AvailabilityBanner pieces={Number(piecesInput)} plan={plan} />
               <div className="stats-grid">
                 <StatCard icon="cart" label="Carros necesarios" value={plan.requiredCarts} detail="Para completar el traslado" />
-                <StatCard icon="check" label="Carros disponibles" value={Number(availableInput)} detail={`${plan.usedCarts} se usarÃ¡n en la tanda`} tone="green" />
+                <StatCard icon="check" label="Carros disponibles" value={Number(availableInput)} detail={`${plan.usedCarts} se usarán en la tanda`} tone="green" />
                 <StatCard icon={plan.missingCarts ? 'alert' : 'layers'} label={balanceLabel} value={balanceValue} detail="Balance de disponibilidad" tone={plan.missingCarts ? 'red' : 'gray'} />
                 <StatCard icon="boxes" label="Primera tanda" value={plan.firstBatchPieces} detail="Piezas que se trasladan" tone="amber" />
-                <StatCard icon="layers" label="Piezas pendientes" value={plan.pendingPieces} detail="Para una prÃ³xima tanda" tone={plan.pendingPieces ? 'red' : 'green'} />
+                <StatCard icon="layers" label="Piezas pendientes" value={plan.pendingPieces} detail="Para una próxima tanda" tone={plan.pendingPieces ? 'red' : 'green'} />
               </div>
             </section>
 
             <section className="distribution-section" aria-labelledby="distribution-title">
-              <div className="section-heading"><div><span className="section-kicker"><span /> DISTRIBUCIÃ“N</span><h2 id="distribution-title">Carga y OT de los carros</h2></div>{plan.usedCarts > 0 && <p>{plan.usedCarts} {plan.usedCarts === 1 ? 'carro asignado' : 'carros asignados'} Â· mÃ¡ximo {CARTS_PER_PAGE} por pÃ¡gina</p>}</div>
+              <div className="section-heading"><div><span className="section-kicker"><span /> DISTRIBUCIÓN</span><h2 id="distribution-title">Carga y OT de los carros</h2></div>{plan.usedCarts > 0 && <p>{plan.usedCarts} {plan.usedCarts === 1 ? 'carro asignado' : 'carros asignados'} · máximo {CARTS_PER_PAGE} por página</p>}</div>
               {plan.usedCarts === 0 ? <EmptyDistribution zeroAvailable={Number(piecesInput) > 0 && Number(availableInput) === 0} /> : <>
                 <div className="carts-grid">{visibleCarts.map((cart) => <CartCard capacity={Number(capacityInput)} key={cart.number} onOtChange={updateOrder} ot={orders[cart.number] ?? ''} {...cart} />)}</div>
-                {totalPages > 1 && <nav aria-label="PÃ¡ginas de carros" className="pagination"><button disabled={currentPage === 1} onClick={() => setPage(Math.max(1, currentPage - 1))} type="button">Anterior</button><span>PÃ¡gina <strong>{currentPage}</strong> de {totalPages}</span><button disabled={currentPage === totalPages} onClick={() => setPage(Math.min(totalPages, currentPage + 1))} type="button">Siguiente <Icon name="arrow" size={14} /></button></nav>}
+                {totalPages > 1 && <nav aria-label="Páginas de carros" className="pagination"><button disabled={currentPage === 1} onClick={() => setPage(Math.max(1, currentPage - 1))} type="button">Anterior</button><span>Página <strong>{currentPage}</strong> de {totalPages}</span><button disabled={currentPage === totalPages} onClick={() => setPage(Math.min(totalPages, currentPage + 1))} type="button">Siguiente <Icon name="arrow" size={14} /></button></nav>}
               </>}
             </section>
 
@@ -259,17 +259,16 @@ function App() {
                 <span>{records.length} {records.length === 1 ? 'registro guardado' : 'registros guardados'}</span>
                 <button disabled={!canSave} onClick={saveTransfer} type="button"><Icon name="save" size={17} /> Guardar traslado</button>
               </div>
-              {!canSave && <p className="save-help">CompletÃ¡ ambos nombres y los datos vÃ¡lidos del traslado para guardar.</p>}
+              {!canSave && <p className="save-help">Completá ambos nombres y los datos válidos del traslado para guardar.</p>}
               {visibleSaveResult?.type === 'success' && <div className="save-feedback save-feedback--success" role="status"><Icon name="check" size={18} /><span><strong>Traslado guardado correctamente.</strong> {new Date(visibleSaveResult.createdAt).toLocaleString('es-AR')}</span></div>}
               {visibleSaveResult?.type === 'error' && <div className="save-feedback save-feedback--error" role="alert"><Icon name="alert" size={18} /><span>{visibleSaveResult.message}</span></div>}
             </section>
           </>
         )}
       </main>
-      <footer><span>PLANIFICADOR DE TRASLADOS Â· V2.1</span><p>Herramienta de apoyo para la logÃ­stica interna de planta.</p></footer>
+      <footer><span>PLANIFICADOR DE TRASLADOS · V2.1</span><p>Herramienta de apoyo para la logística interna de planta.</p></footer>
     </div>
   )
 }
 
 export default App
-
