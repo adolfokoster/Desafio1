@@ -9,6 +9,7 @@
 .account-copy { align-items: flex-end; display: flex; flex-direction: column; line-height: 1.25; }
 .account-copy strong { font-size: 11px; }
 .account-copy small { color: #9eb0c7; font-size: 9px; }
+.account-role { background: rgba(255, 255, 255, .12); border: 1px solid rgba(255, 255, 255, .2); border-radius: 999px; color: #d8e9ff; font-size: 8px; font-weight: 800; letter-spacing: .5px; padding: 5px 8px; text-transform: uppercase; }
 .logout-button { background: transparent; border: 1px solid #506580; border-radius: 8px; color: #d7e1ed; cursor: pointer; font-size: 10px; font-weight: 700; min-height: 34px; padding: 0 11px; }
 .logout-button:hover:not(:disabled) { background: #17375f; border-color: #6f89a7; }
 .logout-button:disabled { cursor: wait; opacity: .6; }

@@ -71,16 +71,26 @@ export async function signOutUser() {
   return signOut(authentication)
 }
 
-export async function saveTransferRecord(userId, record) {
+export async function getUserRole(userId) {
+  const [database, { doc, getDoc }] = await Promise.all([
+    getDatabase(),
+    import('firebase/firestore'),
+  ])
+  const roleDocument = await getDoc(doc(database, 'roles', userId))
+  return roleDocument.exists() && roleDocument.data().role === 'admin' ? 'admin' : 'user'
+}
+
+export async function saveTransferRecord(user, record) {
   const [database, { doc, serverTimestamp, setDoc }] = await Promise.all([
     getDatabase(),
     import('firebase/firestore'),
   ])
-  const reference = doc(database, 'users', userId, 'estimations', record.id)
+  const reference = doc(database, 'users', user.uid, 'estimations', record.id)
 
   await setDoc(reference, {
     ...record,
-    ownerId: userId,
+    ownerId: user.uid,
+    ownerEmail: user.email ?? '',
     createdAtClient: record.createdAt,
     createdAt: serverTimestamp(),
   })
@@ -88,13 +98,15 @@ export async function saveTransferRecord(userId, record) {
   return reference.id
 }
 
-export async function listTransferRecords(userId) {
-  const [database, { collection, getDocs, limit, orderBy, query }] = await Promise.all([
+export async function listTransferRecords(userId, role = 'user') {
+  const [database, { collection, collectionGroup, getDocs, limit, orderBy, query }] = await Promise.all([
     getDatabase(),
     import('firebase/firestore'),
   ])
   const recordsQuery = query(
-    collection(database, 'users', userId, 'estimations'),
+    role === 'admin'
+      ? collectionGroup(database, 'estimations')
+      : collection(database, 'users', userId, 'estimations'),
     orderBy('createdAt', 'desc'),
     limit(50),
   )

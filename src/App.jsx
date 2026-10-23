@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import DragonMascot from './components/DragonMascot.jsx'
-import { listTransferRecords, observeAuthState, saveTransferRecord, signInWithGoogle, signOutUser } from './services/firebase.js'
+import { getUserRole, listTransferRecords, observeAuthState, saveTransferRecord, signInWithGoogle, signOutUser } from './services/firebase.js'
 import { exportTransferRecords } from './utils/exportRecords.js'
 import { calculateTransport, getCartLoad, PIECE_SIZES, validateInteger } from './utils/transport.js'
 import { readStoredObject, removeStoredValue, storeObject } from './utils/storage.js'
@@ -153,11 +153,11 @@ function AuthLoading() {
   return <div className="auth-loading"><div className="auth-spinner" /><p>Preparando tu espacio de trabajo...</p></div>
 }
 
-function HistorySection({ records, isLoading, isExporting, error, exportError, onRefresh, onExport }) {
+function HistorySection({ records, isAdmin, isLoading, isExporting, error, exportError, onRefresh, onExport }) {
   return (
     <section className="history-section" aria-labelledby="history-title">
       <div className="section-heading history-heading">
-        <div><span className="section-kicker"><span /> REGISTROS</span><h2 id="history-title">Mis estimaciones</h2></div>
+        <div><span className="section-kicker"><span /> REGISTROS</span><h2 id="history-title">{isAdmin ? 'Todas las estimaciones' : 'Mis estimaciones'}</h2></div>
         <div className="history-actions">
           <button className="history-button" disabled={isLoading} onClick={onRefresh} type="button"><Icon name="refresh" size={16} /> {isLoading ? 'Actualizando...' : 'Actualizar'}</button>
           <button className="history-button history-button--export" disabled={records.length === 0 || isExporting} onClick={onExport} type="button"><Icon name="download" size={16} /> {isExporting ? 'Generando...' : 'Exportar Excel'}</button>
@@ -166,14 +166,15 @@ function HistorySection({ records, isLoading, isExporting, error, exportError, o
       {error && <div className="history-message history-message--error" role="alert"><Icon name="alert" size={19} /><span>{error}</span></div>}
       {exportError && <div className="history-message history-message--error" role="alert"><Icon name="alert" size={19} /><span>{exportError}</span></div>}
       {!error && isLoading && records.length === 0 && <div className="history-message"><Icon name="history" size={20} /><span>Cargando registros de Firestore...</span></div>}
-      {!error && !isLoading && records.length === 0 && <div className="history-message"><Icon name="history" size={20} /><span>Todavía no guardaste estimaciones.</span></div>}
+      {!error && !isLoading && records.length === 0 && <div className="history-message"><Icon name="history" size={20} /><span>{isAdmin ? 'Todavía no hay estimaciones registradas.' : 'Todavía no guardaste estimaciones.'}</span></div>}
       {records.length > 0 && (
         <div className="history-table-wrap">
           <table className="history-table">
-            <thead><tr><th>Fecha</th><th>Piezas</th><th>Carros</th><th>Tamaño</th><th>Cargó los datos</th><th>Trasladó el material</th></tr></thead>
+            <thead><tr><th>Fecha</th>{isAdmin && <th>Cuenta</th>}<th>Piezas</th><th>Carros</th><th>Tamaño</th><th>Cargó los datos</th><th>Trasladó el material</th></tr></thead>
             <tbody>{records.map((record) => (
               <tr key={record.firestoreId}>
                 <td data-label="Fecha">{formatRecordDate(record.createdAt)}</td>
+                {isAdmin && <td data-label="Cuenta">{record.ownerEmail || record.ownerId}</td>}
                 <td data-label="Piezas"><strong>{record.pieces}</strong></td>
                 <td data-label="Carros"><strong>{record.requiredCarts}</strong></td>
                 <td data-label="Tamaño"><span className={`size-badge size-badge--${record.pieceSize}`}>{record.pieceSizeLabel}</span></td>
@@ -184,12 +185,12 @@ function HistorySection({ records, isLoading, isExporting, error, exportError, o
           </table>
         </div>
       )}
-      {records.length > 0 && <p className="history-count">Mostrando tus últimas {records.length} estimaciones.</p>}
+      {records.length > 0 && <p className="history-count">{isAdmin ? `Mostrando las últimas ${records.length} estimaciones de todos los usuarios.` : `Mostrando tus últimas ${records.length} estimaciones.`}</p>}
     </section>
   )
 }
 
-function PlannerApp({ user, onLogout, isSigningOut }) {
+function PlannerApp({ user, role, onLogout, isSigningOut }) {
   const [piecesInput, setPiecesInput] = useState('37')
   const [availableInput, setAvailableInput] = useState('4')
   const [pieceSize, setPieceSize] = useState('medianas')
@@ -221,7 +222,7 @@ function PlannerApp({ user, onLogout, isSigningOut }) {
   }, [orders])
   useEffect(() => {
     let isActive = true
-    listTransferRecords(user.uid)
+    listTransferRecords(user.uid, role)
       .then((savedRecords) => {
         if (isActive) setCloudRecords(savedRecords)
       })
@@ -236,7 +237,7 @@ function PlannerApp({ user, onLogout, isSigningOut }) {
         if (isActive) setIsLoadingRecords(false)
       })
     return () => { isActive = false }
-  }, [recordsRefreshKey, user.uid])
+  }, [recordsRefreshKey, role, user.uid])
 
   const refreshRecords = () => {
     setIsLoadingRecords(true)
@@ -311,7 +312,7 @@ function PlannerApp({ user, onLogout, isSigningOut }) {
     setSaveResult(null)
 
     try {
-      await saveTransferRecord(user.uid, record)
+      await saveTransferRecord(user, record)
       setSaveResult({ type: 'success', signature: saveSignature, createdAt: record.createdAt })
       refreshRecords()
     } catch (error) {
@@ -332,7 +333,7 @@ function PlannerApp({ user, onLogout, isSigningOut }) {
 
   return (
     <div className="app-shell">
-      <header className="topbar"><div className="brand-mark"><Icon name="boxes" size={23} /></div><div><p className="eyebrow">LOGÍSTICA INTERNA</p><p className="brand-name">Planificador de Traslado de Piezas</p></div><div className="account-area"><span className="account-copy"><strong>{user.displayName ?? 'Usuario'}</strong><small>{user.email}</small></span><button className="logout-button" disabled={isSigningOut} onClick={onLogout} type="button">{isSigningOut ? 'Saliendo...' : 'Cerrar sesión'}</button><span className="version-badge">Versión 3.0</span></div></header>
+      <header className="topbar"><div className="brand-mark"><Icon name="boxes" size={23} /></div><div><p className="eyebrow">LOGÍSTICA INTERNA</p><p className="brand-name">Planificador de Traslado de Piezas</p></div><div className="account-area"><span className="account-role">{role === 'admin' ? 'Administrador' : 'Operario'}</span><span className="account-copy"><strong>{user.displayName ?? 'Usuario'}</strong><small>{user.email}</small></span><button className="logout-button" disabled={isSigningOut} onClick={onLogout} type="button">{isSigningOut ? 'Saliendo...' : 'Cerrar sesión'}</button><span className="version-badge">Versión 3.1</span></div></header>
       <main>
         <section className="intro">
           <div><span className="section-kicker"><span /> PLANIFICACIÓN DE CARGA</span><h1>Organizá cada traslado<br />con <em>precisión</em></h1><p>Configurá las piezas y los carros disponibles. El sistema prepara una primera tanda realista y te muestra lo que queda pendiente.</p></div>
@@ -396,15 +397,16 @@ function PlannerApp({ user, onLogout, isSigningOut }) {
             </section>
           </>
         )}
-        <HistorySection error={recordsError} exportError={exportError} isExporting={isExporting} isLoading={isLoadingRecords} onExport={exportRecords} onRefresh={refreshRecords} records={cloudRecords} />
+        <HistorySection error={recordsError} exportError={exportError} isAdmin={role === 'admin'} isExporting={isExporting} isLoading={isLoadingRecords} onExport={exportRecords} onRefresh={refreshRecords} records={cloudRecords} />
       </main>
-      <footer><span>PLANIFICADOR DE TRASLADOS · V3.0</span><p>Herramienta de apoyo para la logística interna de planta.</p></footer>
+      <footer><span>PLANIFICADOR DE TRASLADOS · V3.1</span><p>Herramienta de apoyo para la logística interna de planta.</p></footer>
     </div>
   )
 }
 
 function App() {
   const [user, setUser] = useState(null)
+  const [role, setRole] = useState(null)
   const [isAuthLoading, setIsAuthLoading] = useState(true)
   const [isSigningIn, setIsSigningIn] = useState(false)
   const [isSigningOut, setIsSigningOut] = useState(false)
@@ -415,10 +417,24 @@ function App() {
     let unsubscribe
 
     removeStoredValue(LEGACY_RECORDS_KEY)
-    observeAuthState((authenticatedUser) => {
+    observeAuthState(async (authenticatedUser) => {
       if (!isActive) return
       setUser(authenticatedUser)
-      setIsAuthLoading(false)
+      if (!authenticatedUser) {
+        setRole(null)
+        setIsAuthLoading(false)
+        return
+      }
+
+      setIsAuthLoading(true)
+      try {
+        const authenticatedRole = await getUserRole(authenticatedUser.uid)
+        if (isActive) setRole(authenticatedRole)
+      } catch {
+        if (isActive) setRole('user')
+      } finally {
+        if (isActive) setIsAuthLoading(false)
+      }
     })
       .then((stopObserving) => { unsubscribe = stopObserving })
       .catch(() => {
@@ -464,7 +480,7 @@ function App() {
 
   if (isAuthLoading) return <AuthLoading />
   if (!user) return <LoginPage error={authError} isSigningIn={isSigningIn} onSignIn={handleSignIn} />
-  return <PlannerApp isSigningOut={isSigningOut} key={user.uid} onLogout={handleLogout} user={user} />
+  return <PlannerApp isSigningOut={isSigningOut} key={`${user.uid}-${role}`} onLogout={handleLogout} role={role} user={user} />
 }
 
 export default App
