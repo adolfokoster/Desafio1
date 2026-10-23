@@ -16,7 +16,7 @@ const requiredConfig = [
   'appId',
 ]
 
-async function getDatabase() {
+async function getFirebaseApp() {
   const missingConfig = requiredConfig.filter((key) => !firebaseConfig[key])
 
   if (missingConfig.length > 0) {
@@ -25,23 +25,62 @@ async function getDatabase() {
     throw error
   }
 
-  const [{ getApp, getApps, initializeApp }, { getFirestore }] = await Promise.all([
-    import('firebase/app'),
+  const { getApp, getApps, initializeApp } = await import('firebase/app')
+  return getApps().length > 0 ? getApp() : initializeApp(firebaseConfig)
+}
+
+async function getDatabase() {
+  const [app, { getFirestore }] = await Promise.all([
+    getFirebaseApp(),
     import('firebase/firestore'),
   ])
-  const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig)
   return getFirestore(app)
 }
 
-export async function saveTransferRecord(record) {
+async function getAuthentication() {
+  const [app, { getAuth }] = await Promise.all([
+    getFirebaseApp(),
+    import('firebase/auth'),
+  ])
+  return getAuth(app)
+}
+
+export async function observeAuthState(callback) {
+  const [authentication, { onAuthStateChanged }] = await Promise.all([
+    getAuthentication(),
+    import('firebase/auth'),
+  ])
+  return onAuthStateChanged(authentication, callback)
+}
+
+export async function signInWithGoogle() {
+  const [authentication, { GoogleAuthProvider, signInWithPopup }] = await Promise.all([
+    getAuthentication(),
+    import('firebase/auth'),
+  ])
+  const provider = new GoogleAuthProvider()
+  provider.setCustomParameters({ prompt: 'select_account' })
+  return signInWithPopup(authentication, provider)
+}
+
+export async function signOutUser() {
+  const [authentication, { signOut }] = await Promise.all([
+    getAuthentication(),
+    import('firebase/auth'),
+  ])
+  return signOut(authentication)
+}
+
+export async function saveTransferRecord(userId, record) {
   const [database, { doc, serverTimestamp, setDoc }] = await Promise.all([
     getDatabase(),
     import('firebase/firestore'),
   ])
-  const reference = doc(database, 'traslados', record.id)
+  const reference = doc(database, 'users', userId, 'estimations', record.id)
 
   await setDoc(reference, {
     ...record,
+    ownerId: userId,
     createdAtClient: record.createdAt,
     createdAt: serverTimestamp(),
   })
@@ -49,13 +88,13 @@ export async function saveTransferRecord(record) {
   return reference.id
 }
 
-export async function listTransferRecords() {
+export async function listTransferRecords(userId) {
   const [database, { collection, getDocs, limit, orderBy, query }] = await Promise.all([
     getDatabase(),
     import('firebase/firestore'),
   ])
   const recordsQuery = query(
-    collection(database, 'traslados'),
+    collection(database, 'users', userId, 'estimations'),
     orderBy('createdAt', 'desc'),
     limit(50),
   )

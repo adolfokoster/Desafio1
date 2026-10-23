@@ -25,3 +25,11 @@ export function storeObject(key, value) {
     return false
   }
 }
+
+export function removeStoredValue(key) {
+  try {
+    localStorage.removeItem(key)
+  } catch {
+    // La aplicación sigue funcionando si el navegador bloquea el almacenamiento.
+  }
+}

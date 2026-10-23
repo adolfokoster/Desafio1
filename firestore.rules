@@ -2,17 +2,26 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-    match /traslados/{transferId} {
-      allow create: if isValidTransfer(transferId);
-      allow read: if true;
+    match /users/{userId}/estimations/{estimationId} {
+      allow create: if isOwner(userId) && isValidEstimation(estimationId, userId);
+      allow read: if isOwner(userId);
       allow update, delete: if false;
     }
 
-    function isValidTransfer(transferId) {
+    match /traslados/{transferId} {
+      allow read, write: if false;
+    }
+
+    function isOwner(userId) {
+      return request.auth != null && request.auth.uid == userId;
+    }
+
+    function isValidEstimation(estimationId, userId) {
       let data = request.resource.data;
 
       return data.keys().hasAll([
           'id',
+          'ownerId',
           'createdAt',
           'createdAtClient',
           'loadedBy',
@@ -32,6 +41,7 @@ service cloud.firestore {
         ])
         && data.keys().hasOnly([
           'id',
+          'ownerId',
           'createdAt',
           'createdAtClient',
           'loadedBy',
@@ -49,7 +59,9 @@ service cloud.firestore {
           'surplusCarts',
           'orders'
         ])
-        && data.id == transferId
+        && data.id == estimationId
+        && data.ownerId == userId
+        && data.ownerId == request.auth.uid
         && data.createdAt is timestamp
         && data.createdAtClient is string
         && data.createdAtClient.size() <= 40

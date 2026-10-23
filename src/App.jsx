@@ -1,15 +1,15 @@
 import { useEffect, useMemo, useState } from 'react'
 import DragonMascot from './components/DragonMascot.jsx'
-import { listTransferRecords, saveTransferRecord } from './services/firebase.js'
+import { listTransferRecords, observeAuthState, saveTransferRecord, signInWithGoogle, signOutUser } from './services/firebase.js'
 import { exportTransferRecords } from './utils/exportRecords.js'
 import { calculateTransport, getCartLoad, PIECE_SIZES, validateInteger } from './utils/transport.js'
-import { readStoredArray, readStoredObject, storeObject } from './utils/storage.js'
+import { readStoredObject, removeStoredValue, storeObject } from './utils/storage.js'
 import './App.css'
 
 const CARTS_PER_PAGE = 12
 const CAPACITY_KEY = 'traslados-capacidades-v2'
 const OT_KEY = 'traslados-ot-v2'
-const RECORDS_KEY = 'traslados-registros-v2'
+const LEGACY_RECORDS_KEY = 'traslados-registros-v2'
 
 function createRecordMetadata() {
   const createdAt = new Date().toISOString()
@@ -123,11 +123,41 @@ function formatRecordDate(value) {
   return Number.isNaN(date.getTime()) ? 'Sin fecha' : date.toLocaleString('es-AR', { dateStyle: 'short', timeStyle: 'short' })
 }
 
+function GoogleIcon() {
+  return (
+    <svg aria-hidden="true" className="google-icon" viewBox="0 0 24 24">
+      <path d="M21.6 12.23c0-.71-.06-1.4-.18-2.06H12v3.9h5.38a4.6 4.6 0 0 1-2 3.02v2.53h3.24c1.9-1.75 2.98-4.33 2.98-7.39Z" fill="#4285F4" />
+      <path d="M12 22c2.7 0 4.98-.9 6.63-2.38l-3.24-2.53c-.9.6-2.05.96-3.39.96-2.61 0-4.82-1.76-5.61-4.13H3.04v2.6A10 10 0 0 0 12 22Z" fill="#34A853" />
+      <path d="M6.39 13.92A6 6 0 0 1 6.08 12c0-.67.11-1.32.31-1.92v-2.6H3.04A10 10 0 0 0 2 12c0 1.61.38 3.14 1.04 4.52l3.35-2.6Z" fill="#FBBC05" />
+      <path d="M12 5.95c1.47 0 2.79.5 3.82 1.5l2.88-2.88A9.65 9.65 0 0 0 12 2a10 10 0 0 0-8.96 5.48l3.35 2.6C7.18 7.71 9.39 5.95 12 5.95Z" fill="#EA4335" />
+    </svg>
+  )
+}
+
+function LoginPage({ error, isSigningIn, onSignIn }) {
+  return (
+    <main className="login-page">
+      <section className="login-card">
+        <div className="login-brand"><span><Icon name="boxes" size={28} /></span><div><p>LOGÍSTICA INTERNA</p><strong>Planificador de Traslados</strong></div></div>
+        <div className="login-copy"><span className="section-kicker"><span /> ACCESO SEGURO</span><h1>Ingresá para organizar<br />tus <em>estimaciones</em></h1><p>Cada cuenta dispone de un historial privado. Tus datos y estimaciones solamente estarán disponibles para vos.</p></div>
+        <button className="google-login" disabled={isSigningIn} onClick={onSignIn} type="button"><GoogleIcon />{isSigningIn ? 'Ingresando...' : 'Continuar con Google'}</button>
+        {error && <div className="login-error" role="alert"><Icon name="alert" size={18} /><span>{error}</span></div>}
+        <div className="login-security"><Icon name="check" size={17} /><span>Autenticación protegida por Firebase</span></div>
+      </section>
+      <aside className="login-visual"><DragonMascot /><div><strong>Tu planificación, en un solo lugar.</strong><span>Calculá, guardá y exportá tus propios traslados.</span></div></aside>
+    </main>
+  )
+}
+
+function AuthLoading() {
+  return <div className="auth-loading"><div className="auth-spinner" /><p>Preparando tu espacio de trabajo...</p></div>
+}
+
 function HistorySection({ records, isLoading, isExporting, error, exportError, onRefresh, onExport }) {
   return (
     <section className="history-section" aria-labelledby="history-title">
       <div className="section-heading history-heading">
-        <div><span className="section-kicker"><span /> REGISTROS</span><h2 id="history-title">Historial de traslados</h2></div>
+        <div><span className="section-kicker"><span /> REGISTROS</span><h2 id="history-title">Mis estimaciones</h2></div>
         <div className="history-actions">
           <button className="history-button" disabled={isLoading} onClick={onRefresh} type="button"><Icon name="refresh" size={16} /> {isLoading ? 'Actualizando...' : 'Actualizar'}</button>
           <button className="history-button history-button--export" disabled={records.length === 0 || isExporting} onClick={onExport} type="button"><Icon name="download" size={16} /> {isExporting ? 'Generando...' : 'Exportar Excel'}</button>
@@ -136,7 +166,7 @@ function HistorySection({ records, isLoading, isExporting, error, exportError, o
       {error && <div className="history-message history-message--error" role="alert"><Icon name="alert" size={19} /><span>{error}</span></div>}
       {exportError && <div className="history-message history-message--error" role="alert"><Icon name="alert" size={19} /><span>{exportError}</span></div>}
       {!error && isLoading && records.length === 0 && <div className="history-message"><Icon name="history" size={20} /><span>Cargando registros de Firestore...</span></div>}
-      {!error && !isLoading && records.length === 0 && <div className="history-message"><Icon name="history" size={20} /><span>Todavía no hay traslados registrados.</span></div>}
+      {!error && !isLoading && records.length === 0 && <div className="history-message"><Icon name="history" size={20} /><span>Todavía no guardaste estimaciones.</span></div>}
       {records.length > 0 && (
         <div className="history-table-wrap">
           <table className="history-table">
@@ -154,20 +184,19 @@ function HistorySection({ records, isLoading, isExporting, error, exportError, o
           </table>
         </div>
       )}
-      {records.length > 0 && <p className="history-count">Mostrando los últimos {records.length} registros.</p>}
+      {records.length > 0 && <p className="history-count">Mostrando tus últimas {records.length} estimaciones.</p>}
     </section>
   )
 }
 
-function App() {
+function PlannerApp({ user, onLogout, isSigningOut }) {
   const [piecesInput, setPiecesInput] = useState('37')
   const [availableInput, setAvailableInput] = useState('4')
   const [pieceSize, setPieceSize] = useState('medianas')
   const [capacities, setCapacities] = useState(() => readStoredObject(CAPACITY_KEY, { grandes: '', medianas: '', pequenas: '' }))
   const [orders, setOrders] = useState(() => readStoredObject(OT_KEY, {}))
-  const [loadedBy, setLoadedBy] = useState('')
+  const [loadedBy, setLoadedBy] = useState(user.displayName ?? '')
   const [transportedBy, setTransportedBy] = useState('')
-  const [records, setRecords] = useState(() => readStoredArray(RECORDS_KEY))
   const [saveResult, setSaveResult] = useState(null)
   const [isSaving, setIsSaving] = useState(false)
   const [cloudRecords, setCloudRecords] = useState([])
@@ -192,7 +221,7 @@ function App() {
   }, [orders])
   useEffect(() => {
     let isActive = true
-    listTransferRecords()
+    listTransferRecords(user.uid)
       .then((savedRecords) => {
         if (isActive) setCloudRecords(savedRecords)
       })
@@ -207,7 +236,7 @@ function App() {
         if (isActive) setIsLoadingRecords(false)
       })
     return () => { isActive = false }
-  }, [recordsRefreshKey])
+  }, [recordsRefreshKey, user.uid])
 
   const refreshRecords = () => {
     setIsLoadingRecords(true)
@@ -282,12 +311,7 @@ function App() {
     setSaveResult(null)
 
     try {
-      const firestoreId = await saveTransferRecord(record)
-      const savedRecord = { ...record, firestoreId }
-      const nextRecords = [savedRecord, ...records]
-
-      storeObject(RECORDS_KEY, nextRecords)
-      setRecords(nextRecords)
+      await saveTransferRecord(user.uid, record)
       setSaveResult({ type: 'success', signature: saveSignature, createdAt: record.createdAt })
       refreshRecords()
     } catch (error) {
@@ -308,7 +332,7 @@ function App() {
 
   return (
     <div className="app-shell">
-      <header className="topbar"><div className="brand-mark"><Icon name="boxes" size={23} /></div><div><p className="eyebrow">LOGÍSTICA INTERNA</p><p className="brand-name">Planificador de Traslado de Piezas</p></div><span className="version-badge">Versión 2.4</span></header>
+      <header className="topbar"><div className="brand-mark"><Icon name="boxes" size={23} /></div><div><p className="eyebrow">LOGÍSTICA INTERNA</p><p className="brand-name">Planificador de Traslado de Piezas</p></div><div className="account-area"><span className="account-copy"><strong>{user.displayName ?? 'Usuario'}</strong><small>{user.email}</small></span><button className="logout-button" disabled={isSigningOut} onClick={onLogout} type="button">{isSigningOut ? 'Saliendo...' : 'Cerrar sesión'}</button><span className="version-badge">Versión 3.0</span></div></header>
       <main>
         <section className="intro">
           <div><span className="section-kicker"><span /> PLANIFICACIÓN DE CARGA</span><h1>Organizá cada traslado<br />con <em>precisión</em></h1><p>Configurá las piezas y los carros disponibles. El sistema prepara una primera tanda realista y te muestra lo que queda pendiente.</p></div>
@@ -360,23 +384,87 @@ function App() {
             <section className="save-section" aria-labelledby="save-title">
               <div className="save-copy">
                 <div className="save-icon"><Icon name="save" size={23} /></div>
-                <div><h2 id="save-title">Guardar registro del traslado</h2><p>El registro se guarda en Firestore y se conserva una copia local en este dispositivo.</p></div>
+                <div><h2 id="save-title">Guardar estimación del traslado</h2><p>La estimación se guarda en el historial privado de tu cuenta.</p></div>
               </div>
               <div className="save-actions">
-                <span>{records.length} {records.length === 1 ? 'registro en este dispositivo' : 'registros en este dispositivo'}</span>
-                <button disabled={!canSave} onClick={saveTransfer} type="button"><Icon name="save" size={17} /> {isSaving ? 'Guardando...' : 'Guardar traslado'}</button>
+                <span>Historial privado en tu cuenta</span>
+                <button disabled={!canSave} onClick={saveTransfer} type="button"><Icon name="save" size={17} /> {isSaving ? 'Guardando...' : 'Guardar estimación'}</button>
               </div>
               {!isSaving && !canSave && <p className="save-help">Completá ambos nombres y los datos válidos del traslado para guardar.</p>}
-              {visibleSaveResult?.type === 'success' && <div className="save-feedback save-feedback--success" role="status"><Icon name="check" size={18} /><span><strong>Traslado guardado en Firestore.</strong> {new Date(visibleSaveResult.createdAt).toLocaleString('es-AR')}</span></div>}
+              {visibleSaveResult?.type === 'success' && <div className="save-feedback save-feedback--success" role="status"><Icon name="check" size={18} /><span><strong>Estimación guardada en tu cuenta.</strong> {new Date(visibleSaveResult.createdAt).toLocaleString('es-AR')}</span></div>}
               {visibleSaveResult?.type === 'error' && <div className="save-feedback save-feedback--error" role="alert"><Icon name="alert" size={18} /><span>{visibleSaveResult.message}</span></div>}
             </section>
           </>
         )}
         <HistorySection error={recordsError} exportError={exportError} isExporting={isExporting} isLoading={isLoadingRecords} onExport={exportRecords} onRefresh={refreshRecords} records={cloudRecords} />
       </main>
-      <footer><span>PLANIFICADOR DE TRASLADOS · V2.4</span><p>Herramienta de apoyo para la logística interna de planta.</p></footer>
+      <footer><span>PLANIFICADOR DE TRASLADOS · V3.0</span><p>Herramienta de apoyo para la logística interna de planta.</p></footer>
     </div>
   )
+}
+
+function App() {
+  const [user, setUser] = useState(null)
+  const [isAuthLoading, setIsAuthLoading] = useState(true)
+  const [isSigningIn, setIsSigningIn] = useState(false)
+  const [isSigningOut, setIsSigningOut] = useState(false)
+  const [authError, setAuthError] = useState('')
+
+  useEffect(() => {
+    let isActive = true
+    let unsubscribe
+
+    removeStoredValue(LEGACY_RECORDS_KEY)
+    observeAuthState((authenticatedUser) => {
+      if (!isActive) return
+      setUser(authenticatedUser)
+      setIsAuthLoading(false)
+    })
+      .then((stopObserving) => { unsubscribe = stopObserving })
+      .catch(() => {
+        if (!isActive) return
+        setAuthError('No se pudo iniciar Firebase Authentication.')
+        setIsAuthLoading(false)
+      })
+
+    return () => {
+      isActive = false
+      unsubscribe?.()
+    }
+  }, [])
+
+  async function handleSignIn() {
+    setIsSigningIn(true)
+    setAuthError('')
+    try {
+      await signInWithGoogle()
+    } catch (error) {
+      const messages = {
+        'auth/popup-closed-by-user': 'Se cerró la ventana de Google antes de completar el ingreso.',
+        'auth/popup-blocked': 'El navegador bloqueó la ventana de Google. Habilitá las ventanas emergentes e intentá nuevamente.',
+        'auth/unauthorized-domain': 'Este dominio todavía no está autorizado en Firebase Authentication.',
+        'auth/network-request-failed': 'No se pudo conectar con Google. Revisá la conexión a internet.',
+      }
+      setAuthError(messages[error.code] ?? 'No se pudo ingresar con Google. Intentá nuevamente.')
+    } finally {
+      setIsSigningIn(false)
+    }
+  }
+
+  async function handleLogout() {
+    setIsSigningOut(true)
+    try {
+      await signOutUser()
+    } catch {
+      setAuthError('No se pudo cerrar la sesión. Intentá nuevamente.')
+    } finally {
+      setIsSigningOut(false)
+    }
+  }
+
+  if (isAuthLoading) return <AuthLoading />
+  if (!user) return <LoginPage error={authError} isSigningIn={isSigningIn} onSignIn={handleSignIn} />
+  return <PlannerApp isSigningOut={isSigningOut} key={user.uid} onLogout={handleLogout} user={user} />
 }
 
 export default App
