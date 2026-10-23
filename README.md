@@ -18,6 +18,7 @@ Aplicación web para calcular y visualizar la distribución de piezas en carros 
 - Diseño responsive para escritorio y dispositivos móviles.
 - Registro de responsables y guardado de traslados en Cloud Firestore.
 - Historial público con los últimos 50 traslados registrados.
+- Exportación del historial a un archivo Excel (`.xlsx`) con datos operativos y responsables.
 
 Las capacidades y las OT se guardan localmente. Los traslados se sincronizan con la colección `traslados` de Cloud Firestore y conservan una copia local de respaldo.
 

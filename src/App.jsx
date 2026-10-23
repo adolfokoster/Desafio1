@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import DragonMascot from './components/DragonMascot.jsx'
 import { listTransferRecords, saveTransferRecord } from './services/firebase.js'
+import { exportTransferRecords } from './utils/exportRecords.js'
 import { calculateTransport, getCartLoad, PIECE_SIZES, validateInteger } from './utils/transport.js'
 import { readStoredArray, readStoredObject, storeObject } from './utils/storage.js'
 import './App.css'
@@ -31,6 +32,7 @@ function Icon({ name, size = 20 }) {
     save: (<><path d="M5 3h12l3 3v15H4V3h1Z" /><path d="M8 3v6h8V3M8 21v-7h8v7" /></>),
     history: (<><path d="M3 12a9 9 0 1 0 3-6.7" /><path d="M3 4v5h5M12 7v5l3 2" /></>),
     refresh: (<><path d="M20 7v5h-5" /><path d="M4 17v-5h5" /><path d="M6.1 8a7 7 0 0 1 11.4-2L20 8M4 16l2.5 2a7 7 0 0 0 11.4-2" /></>),
+    download: (<><path d="M12 3v12" /><path d="m7 10 5 5 5-5" /><path d="M5 20h14" /></>),
     arrow: <path d="m9 18 6-6-6-6" />,
   }
   return <svg aria-hidden="true" className="icon" fill="none" height={size} viewBox="0 0 24 24" width={size}><g stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8">{paths[name]}</g></svg>
@@ -121,14 +123,18 @@ function formatRecordDate(value) {
   return Number.isNaN(date.getTime()) ? 'Sin fecha' : date.toLocaleString('es-AR', { dateStyle: 'short', timeStyle: 'short' })
 }
 
-function HistorySection({ records, isLoading, error, onRefresh }) {
+function HistorySection({ records, isLoading, isExporting, error, exportError, onRefresh, onExport }) {
   return (
     <section className="history-section" aria-labelledby="history-title">
       <div className="section-heading history-heading">
         <div><span className="section-kicker"><span /> REGISTROS</span><h2 id="history-title">Historial de traslados</h2></div>
-        <button className="history-refresh" disabled={isLoading} onClick={onRefresh} type="button"><Icon name="refresh" size={16} /> {isLoading ? 'Actualizando...' : 'Actualizar'}</button>
+        <div className="history-actions">
+          <button className="history-button" disabled={isLoading} onClick={onRefresh} type="button"><Icon name="refresh" size={16} /> {isLoading ? 'Actualizando...' : 'Actualizar'}</button>
+          <button className="history-button history-button--export" disabled={records.length === 0 || isExporting} onClick={onExport} type="button"><Icon name="download" size={16} /> {isExporting ? 'Generando...' : 'Exportar Excel'}</button>
+        </div>
       </div>
       {error && <div className="history-message history-message--error" role="alert"><Icon name="alert" size={19} /><span>{error}</span></div>}
+      {exportError && <div className="history-message history-message--error" role="alert"><Icon name="alert" size={19} /><span>{exportError}</span></div>}
       {!error && isLoading && records.length === 0 && <div className="history-message"><Icon name="history" size={20} /><span>Cargando registros de Firestore...</span></div>}
       {!error && !isLoading && records.length === 0 && <div className="history-message"><Icon name="history" size={20} /><span>Todavía no hay traslados registrados.</span></div>}
       {records.length > 0 && (
@@ -167,6 +173,8 @@ function App() {
   const [cloudRecords, setCloudRecords] = useState([])
   const [recordsError, setRecordsError] = useState('')
   const [isLoadingRecords, setIsLoadingRecords] = useState(true)
+  const [isExporting, setIsExporting] = useState(false)
+  const [exportError, setExportError] = useState('')
   const [recordsRefreshKey, setRecordsRefreshKey] = useState(0)
   const [page, setPage] = useState(1)
 
@@ -205,6 +213,18 @@ function App() {
     setIsLoadingRecords(true)
     setRecordsError('')
     setRecordsRefreshKey((current) => current + 1)
+  }
+
+  const exportRecords = async () => {
+    setIsExporting(true)
+    setExportError('')
+    try {
+      await exportTransferRecords(cloudRecords)
+    } catch {
+      setExportError('No se pudo generar el archivo de Excel. Intentá nuevamente.')
+    } finally {
+      setIsExporting(false)
+    }
   }
 
   const plan = useMemo(() => {
@@ -288,7 +308,7 @@ function App() {
 
   return (
     <div className="app-shell">
-      <header className="topbar"><div className="brand-mark"><Icon name="boxes" size={23} /></div><div><p className="eyebrow">LOGÍSTICA INTERNA</p><p className="brand-name">Planificador de Traslado de Piezas</p></div><span className="version-badge">Versión 2.3</span></header>
+      <header className="topbar"><div className="brand-mark"><Icon name="boxes" size={23} /></div><div><p className="eyebrow">LOGÍSTICA INTERNA</p><p className="brand-name">Planificador de Traslado de Piezas</p></div><span className="version-badge">Versión 2.4</span></header>
       <main>
         <section className="intro">
           <div><span className="section-kicker"><span /> PLANIFICACIÓN DE CARGA</span><h1>Organizá cada traslado<br />con <em>precisión</em></h1><p>Configurá las piezas y los carros disponibles. El sistema prepara una primera tanda realista y te muestra lo que queda pendiente.</p></div>
@@ -352,9 +372,9 @@ function App() {
             </section>
           </>
         )}
-        <HistorySection error={recordsError} isLoading={isLoadingRecords} onRefresh={refreshRecords} records={cloudRecords} />
+        <HistorySection error={recordsError} exportError={exportError} isExporting={isExporting} isLoading={isLoadingRecords} onExport={exportRecords} onRefresh={refreshRecords} records={cloudRecords} />
       </main>
-      <footer><span>PLANIFICADOR DE TRASLADOS · V2.3</span><p>Herramienta de apoyo para la logística interna de planta.</p></footer>
+      <footer><span>PLANIFICADOR DE TRASLADOS · V2.4</span><p>Herramienta de apoyo para la logística interna de planta.</p></footer>
     </div>
   )
 }
